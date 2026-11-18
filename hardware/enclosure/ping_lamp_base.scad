@@ -17,10 +17,19 @@ tower_d            = 60;      // outer diameter of the ring = diameter of the to
 tower_cable_hole_d = 16;      // centre hole for the tower wires (also gives access to BOOT / RESET)
 tower_bolt_count   = 3;       // number of fixing screws of the tower base, 0 = none
 tower_bolt_circle  = 36;      // bolt circle diameter of those screws
-tower_bolt_d       = 4.3;     // clearance hole (4.3 = M4)
-tower_bolt_angle   = 90;      // angle of the first screw, counter-clockwise from +x
-tower_nut_af       = 7.0;     // hex nut width across flats (7.0 = M4)
-tower_nut_h        = 3.2;     // hex nut height
+tower_bolt_angle   = 49;      // angle of the first screw, counter-clockwise from +x.
+                              // 49 keeps three screws 19 degrees away from every spacer tube
+                              // and away from the antenna at +y.
+// The tower screws go from above (inside the tower base) into the lid. Nothing is loose
+// below the lid, so nothing can drop onto the PCB.
+tower_fix          = "thread";  // "thread": screw cuts its own thread in the plastic
+                                // "insert": heat-set insert pressed in from below
+tower_pilot_d      = 3.6;     // thread-forming hole (3.6 = M4 in PETG/PLA)
+tower_bolt_d       = 4.3;     // clearance hole above an insert (4.3 = M4)
+tower_insert_d     = 5.6;     // bore for the heat-set insert
+tower_insert_h     = 4.0;     // depth of that bore; the remaining skin takes the pull-out load
+tower_screw_max    = 8;       // longest thread length below the tower base that stays clear of
+                              // the terminal block (lid 5.5 mm + 2.3 mm free above it)
 
 /* [PCB - must match hardware/pcb/design.py] */
 pcb_d            = 54;
@@ -35,6 +44,8 @@ floor_t      = 3.0;
 standoff_h   = 4.0;           // space below the PCB (terminal pins, base plate screw heads)
 comp_h       = 11.5;          // space above the PCB (terminal block, wire bend)
 lid_t        = 5.5;
+clamp_gap    = 0.2;           // the wall ends this much below the lid, so the spacer tubes
+                              // (not the wall) carry the screw force and clamp the PCB
 
 /* [Fasteners] */
 m3_clear_d   = 3.4;
@@ -59,8 +70,21 @@ eps = 0.01;
 inner_d   = pcb_d + 2 * pcb_gap;
 wall_t    = (tower_d - inner_d) / 2;
 pcb_z     = floor_t + standoff_h;          // underside of the PCB
-tray_h    = pcb_z + pcb_t + comp_h;        // top of the wall = underside of the lid
-total_h   = tray_h + lid_t;
+lid_z     = pcb_z + pcb_t + comp_h;        // underside of the lid
+tray_h    = lid_z - clamp_gap;             // top of the wall
+total_h   = lid_z + lid_t;
+usb_relief = 0.8;                          // inner recess above the USB opening, see tray()
+
+// Tower screws must stay clear of the spacer tubes.
+if (tower_bolt_count > 0)
+    for (i = [0 : tower_bolt_count - 1], a = pcb_hole_angles) {
+        b = tower_bolt_angle + i * 360 / tower_bolt_count;
+        d = norm([tower_bolt_circle / 2 * cos(b) - pcb_hole_radius * cos(a),
+                  tower_bolt_circle / 2 * sin(b) - pcb_hole_radius * sin(a)]);
+        assert(d >= tube_d / 2 + tower_insert_d / 2 + 0.8,
+               str("tower screw at ", b, " deg is ", d, " mm from the spacer tube at ", a,
+                   " deg: change tower_bolt_angle"));
+    }
 
 module at_pcb_holes() {
     for (a = pcb_hole_angles) rotate([0, 0, a]) translate([pcb_hole_radius, 0, 0]) children();
@@ -87,6 +111,11 @@ module tray() {
         rotate([0, 0, usb_angle])
             translate([inner_d / 2 - 1, -usb_w / 2, pcb_z + pcb_t + usb_z_centre - usb_h / 2])
                 cube([wall_t + 2, usb_w, usb_h]);
+        // The receptacle reaches to within 0.05 mm of the bore. This recess above the opening
+        // lets the PCB drop straight in.
+        rotate([0, 0, usb_angle])
+            translate([inner_d / 2 - 1, -usb_w / 2, pcb_z + pcb_t + usb_z_centre])
+                cube([1 + usb_relief, usb_w, tray_h]);
         // screws into the base plate, countersunk from the inside
         for (p = plate_screw_pos) translate([p[0], p[1], -eps]) {
             cylinder(d = plate_screw_d, h = floor_t + 2 * eps);
@@ -115,8 +144,12 @@ module lid() {
         }
         translate([0, 0, -eps]) cylinder(d = tower_cable_hole_d, h = lid_t + 2 * eps);
         at_tower_bolts() {
-            translate([0, 0, -eps]) cylinder(d = tower_bolt_d, h = lid_t + 2 * eps);
-            translate([0, 0, -eps]) cylinder(d = tower_nut_af / cos(30) + 0.2, h = tower_nut_h + eps, $fn = 6);
+            if (tower_fix == "insert") {
+                translate([0, 0, -eps]) cylinder(d = tower_bolt_d, h = lid_t + 2 * eps);
+                translate([0, 0, -eps]) cylinder(d = tower_insert_d, h = tower_insert_h + eps);
+            } else {
+                translate([0, 0, -eps]) cylinder(d = tower_pilot_d, h = lid_t + 2 * eps);
+            }
         }
     }
 }
@@ -138,7 +171,7 @@ if (part == "tray") {
         union() {
             color("burlywood") tray();
             pcb_dummy();
-            color("silver") translate([0, 0, tray_h]) lid();
+            color("silver") translate([0, 0, lid_z]) lid();
         }
         // cut-away for the preview
         translate([0, -tower_d, -1]) cube([tower_d, tower_d, total_h + 2]);

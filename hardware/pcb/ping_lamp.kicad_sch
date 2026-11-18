@@ -1823,7 +1823,7 @@
     (pin "2" (uuid c2034a3e-d61c-5be2-b818-034df559b747))
     (instances (project "ping_lamp" (path "/9039f5de-c38f-562a-83f6-ab00b07ed9ed" (reference "R7") (unit 1))))
   )
-  (label "+3V3"
+  (label "GND"
     (at 231.14 72.39 90)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 07604bfd-4019-5b50-8f81-0fa17d4aedd4)
@@ -1849,6 +1849,7 @@
     )
     (property "Datasheet" "~" (at 302.26 50.8 0) (effects (font (size 1.27 1.27)) hide))
     (property "MPN" "0603WAF3903T5E" (at 302.26 50.8 0) (effects (font (size 1.27 1.27)) hide))
+    (property "LCSC" "C23150" (at 302.26 50.8 0) (effects (font (size 1.27 1.27)) hide))
     (pin "1" (uuid 81e1840c-1135-5186-a2d9-fe3d54c30c0b))
     (pin "2" (uuid a673fe0a-59bf-50fa-901c-06ce14c9f23e))
     (instances (project "ping_lamp" (path "/9039f5de-c38f-562a-83f6-ab00b07ed9ed" (reference "R8") (unit 1))))
@@ -2135,12 +2136,12 @@
     (pin "2" (uuid 5485f656-2a87-52ee-9048-bcbe08b2fce0))
     (instances (project "ping_lamp" (path "/9039f5de-c38f-562a-83f6-ab00b07ed9ed" (reference "C5") (unit 1))))
   )
-  (label "EN"
+  (label "GND"
     (at 53.34 209.55 90)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 02702e75-2942-577f-9146-51e567b93c25)
   )
-  (label "GND"
+  (label "EN"
     (at 53.34 217.17 270)
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid 1252a5c9-37c0-526c-b860-a60df30ae936)
@@ -2353,17 +2354,17 @@
     (pin "4" (uuid 305cf306-3f2d-5a66-8277-3c0157000cd9))
     (instances (project "ping_lamp" (path "/9039f5de-c38f-562a-83f6-ab00b07ed9ed" (reference "J3") (unit 1))))
   )
-  (label "+3V3"
+  (label "IO0"
     (at 175.26 226.06 180)
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid 87912510-548f-540e-ad7e-eaf3f47d60c8)
   )
-  (label "IO0"
+  (label "IO1"
     (at 175.26 228.6 180)
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid b247adf6-76a6-55a6-861c-36030784c81c)
   )
-  (label "IO1"
+  (label "+3V3"
     (at 175.26 231.14 180)
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid 349eb1ab-1bfc-5f8d-8898-7dd31d5419b4)
@@ -2554,12 +2555,12 @@
     (pin "2" (uuid f685a21c-fa42-56e9-a5e9-190452f355f3))
     (instances (project "ping_lamp" (path "/9039f5de-c38f-562a-83f6-ab00b07ed9ed" (reference "R10") (unit 1))))
   )
-  (label "GATE_G"
+  (label "G_G"
     (at 226.06 133.35 90)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid e5ca8e35-2998-5bec-8b48-c6b0646f9cac)
   )
-  (label "G_G"
+  (label "GATE_G"
     (at 226.06 140.97 270)
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid 728a7783-3ee4-59ab-961b-84da5f2675c7)
@@ -2585,12 +2586,12 @@
     (pin "2" (uuid f26e5011-551e-5f81-aa82-12afe72aaddb))
     (instances (project "ping_lamp" (path "/9039f5de-c38f-562a-83f6-ab00b07ed9ed" (reference "R11") (unit 1))))
   )
-  (label "GATE_O"
+  (label "G_O"
     (at 226.06 168.91 90)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 5e56af91-42ed-5a90-87e9-fbee073174be)
   )
-  (label "G_O"
+  (label "GATE_O"
     (at 226.06 176.53 270)
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid 6e8c55b6-1faa-5db1-afb5-2984a3dadd6d)
@@ -2616,12 +2617,12 @@
     (pin "2" (uuid 5c1605cf-055d-57b3-b053-61d2450ac7d0))
     (instances (project "ping_lamp" (path "/9039f5de-c38f-562a-83f6-ab00b07ed9ed" (reference "R12") (unit 1))))
   )
-  (label "GATE_R"
+  (label "G_R"
     (at 226.06 204.47 90)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 87a9c17d-6d94-543c-97b5-6cbe780d6a73)
   )
-  (label "G_R"
+  (label "GATE_R"
     (at 226.06 212.09 270)
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid 0ce738c4-ffe7-5b0e-8fa4-5f0fb52a3da0)
@@ -2647,12 +2648,12 @@
     (pin "2" (uuid c1a267c3-15a3-5492-b3db-ff92950ad484))
     (instances (project "ping_lamp" (path "/9039f5de-c38f-562a-83f6-ab00b07ed9ed" (reference "R13") (unit 1))))
   )
-  (label "GATE_AUX"
+  (label "G_AUX"
     (at 226.06 240.03 90)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 30f84bdf-a9c9-570a-bfab-7a430056427e)
   )
-  (label "G_AUX"
+  (label "GATE_AUX"
     (at 226.06 247.65 270)
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid 309c2503-cbda-5839-8591-b877fdc2c983)
@@ -2807,22 +2808,22 @@
     (pin "5" (uuid 53b468de-b975-5b6b-b8e1-3758114be063))
     (instances (project "ping_lamp" (path "/9039f5de-c38f-562a-83f6-ab00b07ed9ed" (reference "J2") (unit 1))))
   )
-  (label "OUT_AUX"
+  (label "OUT_G"
     (at 325.12 193.04 180)
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid 6de5f61d-7ecd-5f0d-92be-4768d7fbc546)
   )
-  (label "OUT_R"
+  (label "OUT_O"
     (at 325.12 195.58 180)
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid d6831ca0-e1e2-50ad-b3f4-40828e6b0598)
   )
-  (label "OUT_O"
+  (label "OUT_R"
     (at 325.12 198.12 180)
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid 953786d8-0615-5e91-808d-6d20b9b34150)
   )
-  (label "OUT_G"
+  (label "OUT_AUX"
     (at 325.12 200.66 180)
     (effects (font (size 1.27 1.27)) (justify right bottom))
     (uuid d17a52a6-ed36-5214-85e1-df939cf2f6e0)
@@ -3025,7 +3026,7 @@
     (effects (font (size 2.0 2.0)) (justify left bottom))
     (uuid 594122f6-079e-541d-8f4a-621aac0d9be6)
   )
-  (text "ESP32-C3: GPIO4 = green, GPIO5 = orange, GPIO6 = red, GPIO7 = aux, GPIO10 = boost enable"
+  (text "ESP32-C3: GPIO4 = green, GPIO5 = orange, GPIO6 = red, GPIO7 = aux, GPIO10 = boost enable (high = 24 V on)"
     (at 30.48 144.78 0)
     (effects (font (size 2.0 2.0)) (justify left bottom))
     (uuid e279a935-63b9-5996-9efe-70ff03544413)

@@ -12,7 +12,7 @@ SS34,D1,D_SMA,C8678,SS34,Schottky 40 V 3 A SMA,1,SMT (fab),search snippet
 22u,C6,C_0805_2012Metric,C45783,CL21A226MAQNNNE,Capacitor 22 uF 25 V X5R 0805,1,SMT (fab),search snippet
 10u/50V,"C7,C8",C_1206_3216Metric,C13585,CL31A106KBHNNNE,Capacitor 10 uF 50 V X5R 1206,2,SMT (fab),search snippet
 100k,R7,R_0603_1608Metric,C25803,0603WAF1003T5E,Resistor 100 k 1 % 0603,1,SMT (fab),search snippet
-390k,R8,R_0603_1608Metric,,0603WAF3903T5E,Resistor 390 k 1 % 0603,1,SMT (fab),select manually
+390k,R8,R_0603_1608Metric,C23150,0603WAF3903T5E,Resistor 390 k 1 % 0603,1,SMT (fab),search snippet
 10k,"R9,R3,R4,R5,R14,R15,R16,R17",R_0603_1608Metric,C25804,0603WAF1002T5E,Resistor 10 k 1 % 0603,8,SMT (fab),search snippet
 ESP32-C3-WROOM-02-N4,U1,ESP32-C3-WROOM-02,C2934560,ESP32-C3-WROOM-02-N4,ESP32-C3 module 4 MB flash,1,SMT (fab),search snippet
 100n,C4,C_0603_1608Metric,C14663,CC0603KRX7R9BB104,Capacitor 100 nF 50 V X7R 0603,1,SMT (fab),search snippet

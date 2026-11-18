@@ -12,7 +12,9 @@ Usage:  /usr/bin/python3 generate.py --freerouting /path/to/freerouting.jar
 """
 
 import argparse
+import collections
 import csv
+import hashlib
 import json
 import math
 import os
@@ -498,9 +500,50 @@ def build_board(path, holes):
     for label, x in (("AUX", design.X_AUX), ("R", design.X_R), ("O", design.X_O),
                      ("G", design.X_G), ("+24V", -7.0)):
         add_text(board, label, x, 18.6, pcbnew.B_SilkS, 0.9, 90)
-    for label, x in (("3V3", -3.81), ("IO0", -1.27), ("IO1", 1.27), ("GND", 3.81)):
-        add_text(board, label, x, 7.3, pcbnew.B_SilkS, 0.8, 90)
+    for i, label in enumerate(design.J3_LABELS):
+        add_text(board, label, design.J3_AT[0] + 2.6, design.J3_AT[1] + 2.54 * i, pcbnew.B_SilkS, 0.8)
+    # Terminal labels on the component side as well: the bottom is hidden once the board is mounted.
+    for label, x in (("AUX", design.X_AUX), ("R", design.X_R), ("O", design.X_O),
+                     ("G", design.X_G), ("24V", -7.0)):
+        add_text(board, label, x, 16.1, pcbnew.F_SilkS, 0.8)
     return board, nets
+
+
+def add_stitching(board, gnd):
+    """Adds ground vias where both pours are solid. Zones must be filled. Returns the via count."""
+    zones = [z for z in board.Zones() if not z.GetIsRuleArea()]
+    diameter, drill = design.STITCH_VIA
+    reach = diameter / 2 + 0.1
+    boxes = []
+    for pad in board.GetPads():
+        box = pad.GetBoundingBox()
+        box.Inflate(mm(design.STITCH_PAD_DISTANCE_MM + diameter / 2))
+        boxes.append(box)
+    limit = design.BOARD_DIAMETER_MM / 2 - 1.5
+    pitch = design.STITCH_GRID_MM
+    steps = int(limit / pitch)
+    grid = [(ix * pitch, iy * pitch) for ix in range(-steps, steps + 1) for iy in range(-steps, steps + 1)
+            if math.hypot(ix * pitch, iy * pitch) <= limit]
+    placed = []
+    for x, y in list(design.STITCH_POINTS) + grid:
+        if any(math.hypot(x - px, y - py) < design.STITCH_MIN_SPACING_MM for px, py in placed):
+            continue
+        probes = [pt(x, y)] + [pt(x + reach * math.cos(a * math.pi / 4), y + reach * math.sin(a * math.pi / 4))
+                               for a in range(8)]
+        if not all(zone.HitTestFilledArea(zone.GetLayer(), p, 0) for zone in zones for p in probes):
+            continue
+        if any(box.Contains(pt(x, y)) for box in boxes):
+            continue
+        via = pcbnew.PCB_VIA(board)
+        via.SetPosition(pt(x, y))
+        via.SetViaType(pcbnew.VIATYPE_THROUGH)
+        via.SetWidth(mm(diameter))
+        via.SetDrill(mm(drill))
+        via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+        via.SetNet(gnd)
+        board.Add(via)
+        placed.append((x, y))
+    return len(placed)
 
 
 def add_ground_zones(board, gnd):
@@ -521,38 +564,49 @@ def add_ground_zones(board, gnd):
         board.Add(zone)
 
 
-def autoroute(board, pcb_path, jar, work, reuse=False):
+def autoroute(board, jar, work, reuse=False):
     dsn, ses = os.path.join(work, NAME + ".dsn"), os.path.join(work, NAME + ".ses")
-    if not (reuse and os.path.exists(ses)):
-        for f in (dsn, ses):
+    stamp = ses + ".input.sha256"
+    # The router keeps only its track clearance to the outline. Export a slightly smaller
+    # outline so that the copper-to-edge rule holds on the real one.
+    radius = design.BOARD_DIAMETER_MM / 2
+    outline = next(d for d in board.GetDrawings() if d.GetLayer() == pcbnew.Edge_Cuts)
+    outline.SetEnd(pt(radius - 0.4, 0))
+    exported = pcbnew.ExportSpecctraDSN(board, dsn)
+    outline.SetEnd(pt(radius, 0))
+    if not exported:
+        raise SystemExit("DSN export failed")
+    # The export lists every net in the default class. Move the power nets into the (empty)
+    # Power class so that the router uses the wide tracks.
+    with open(dsn, encoding="utf-8") as fh:
+        text = fh.read()
+    match = re.search(r'\(class kicad_default ""(.*?)\n\s*\(circuit', text, re.S)
+    names = match.group(1).split()
+    wide = [n for n in names if n in design.POWER_NETS]
+    text = (text[:match.start(1)] + " " + " ".join(n for n in names if n not in wide)
+            + text[match.end(1):]).replace("(class Power\n", "(class Power " + " ".join(wide) + "\n", 1)
+    with open(dsn, "w", encoding="utf-8") as fh:
+        fh.write(text)
+
+    # A stored session is reused only if it was routed from exactly this placement and netlist.
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    stored = open(stamp).read().strip() if os.path.exists(stamp) else ""
+    if reuse and os.path.exists(ses) and stored == digest:
+        print("routing: reusing the stored session")
+    else:
+        if reuse:
+            print("routing: stored session does not match the design, routing again")
+        for f in (ses, stamp):
             if os.path.exists(f):
                 os.remove(f)
-        # The router keeps only its track clearance to the outline. Export a slightly smaller
-        # outline so that the copper-to-edge rule holds on the real one.
-        radius = design.BOARD_DIAMETER_MM / 2
-        outline = next(d for d in board.GetDrawings() if d.GetLayer() == pcbnew.Edge_Cuts)
-        outline.SetEnd(pt(radius - 0.4, 0))
-        exported = pcbnew.ExportSpecctraDSN(board, dsn)
-        outline.SetEnd(pt(radius, 0))
-        if not exported:
-            raise SystemExit("DSN export failed")
-        # The export lists every net in the default class. Move the power nets into the (empty)
-        # Power class so that the router uses the wide tracks.
-        with open(dsn, encoding="utf-8") as fh:
-            text = fh.read()
-        match = re.search(r'\(class kicad_default ""(.*?)\n\s*\(circuit', text, re.S)
-        names = match.group(1).split()
-        wide = [n for n in names if n in design.POWER_NETS]
-        text = (text[:match.start(1)] + " " + " ".join(n for n in names if n not in wide)
-                + text[match.end(1):]).replace("(class Power\n", "(class Power " + " ".join(wide) + "\n", 1)
-        with open(dsn, "w", encoding="utf-8") as fh:
-            fh.write(text)
         cmd = ["java", "-jar", jar, "-de", dsn, "-do", ses, "-mp", "40", "-mt", "1", "-dct", "0"]
         if shutil.which("xvfb-run"):
             cmd = ["xvfb-run", "-a"] + cmd
         log = subprocess.run(cmd, capture_output=True, text=True, timeout=1800, cwd=work)
         if not os.path.exists(ses):
             raise SystemExit("Freerouting produced no session file:\n" + log.stdout[-3000:] + log.stderr[-3000:])
+        with open(stamp, "w") as fh:
+            fh.write(digest)
     import_session(board, ses)
 
 
@@ -688,44 +742,67 @@ def write_outputs(sch_path, pcb_path, fab):
          "-l", "B.Cu,B.SilkS,Edge.Cuts", "--mirror", pcb_path])
 
 
+# DRC entries that do not block fabrication: silkscreen cosmetics, and the notice that the
+# build machine has no footprint library table. Any other entry stops the build.
+DRC_COSMETIC = {"lib_footprint_issues", "silk_edge_clearance", "silk_over_copper", "silk_overlap"}
+PROJECT_FILES = [NAME + ext for ext in (".kicad_sch", ".kicad_pcb", ".kicad_pro", ".kicad_sym")] + ["sym-lib-table"]
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--freerouting", help="path to freerouting jar; omit to keep the board unrouted")
+    ap.add_argument("--freerouting", required=True, help="path to the Freerouting jar")
     ap.add_argument("--work", default="/tmp/ping_lamp_build", help="scratch directory")
     ap.add_argument("--reuse-session", action="store_true",
-                    help="skip the router if the scratch directory already holds a session file")
+                    help="reuse the stored routing if it was made from the same placement and netlist")
     args = ap.parse_args()
-    os.makedirs(args.work, exist_ok=True)
-    fab = os.path.join(HERE, "fab")
-    os.makedirs(fab, exist_ok=True)
-    sch_path = os.path.join(HERE, NAME + ".kicad_sch")
-    pcb_path = os.path.join(HERE, NAME + ".kicad_pcb")
 
-    write_project_library(os.path.join(HERE, NAME + ".kicad_sym"))
+    # Everything is built in the scratch directory. The project files and fabrication outputs in
+    # the repository are replaced only after the netlist, connectivity and DRC checks have passed.
+    build = os.path.join(args.work, "project")
+    shutil.rmtree(build, ignore_errors=True)
+    os.makedirs(build)
+    sch_path = os.path.join(build, NAME + ".kicad_sch")
+    pcb_path = os.path.join(build, NAME + ".kicad_pcb")
+
+    write_project_library(os.path.join(build, NAME + ".kicad_sym"))
     holes = build_schematic(sch_path)
     board, nets = build_board(pcb_path, holes)
     pins = check_netlist(sch_path, board, args.work)
     print("netlist: %d pins, schematic == PCB == design.py" % pins)
 
-    if args.freerouting:
-        autoroute(board, pcb_path, args.freerouting, args.work, args.reuse_session)
+    autoroute(board, args.freerouting, args.work, args.reuse_session)
     add_ground_zones(board, nets["GND"])
     pcbnew.SaveBoard(pcb_path, board)
 
     # Zone filling needs a board that is attached to a project, i.e. one loaded from disk.
     board = pcbnew.LoadBoard(pcb_path)
     apply_rules(board)
-    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
+    filler = pcbnew.ZONE_FILLER(board)
+    filler.Fill(board.Zones())
+    print("ground stitching vias: %d" % add_stitching(board, board.FindNet("GND")))
+    filler.Fill(board.Zones())
     pcbnew.SaveBoard(pcb_path, board)
-    write_project(os.path.join(HERE, NAME + ".kicad_pro"))      # last: saving a board rewrites the project
-    print("unrouted connections: %d" % unrouted_count(board))
-    report = os.path.join(fab, NAME + "_drc.txt")
+    write_project(os.path.join(build, NAME + ".kicad_pro"))     # after SaveBoard, which rewrites it
+
+    unrouted = unrouted_count(board)
+    print("unrouted connections: %d" % unrouted)
+    report = os.path.join(build, NAME + "_drc.txt")
     pcbnew.WriteDRCReport(board, report, pcbnew.EDA_UNITS_MILLIMETRES, True)
     with open(report) as fh:
-        text = fh.read()
-    for line in re.findall(r"\*\* Found .*", text):
-        print(line)
-    write_outputs(sch_path, pcb_path, fab)
+        counts = collections.Counter(re.findall(r"^\[(\w+)\]", fh.read(), re.M))
+    blocking = {kind: n for kind, n in counts.items() if kind not in DRC_COSMETIC}
+    print("DRC: %s" % (", ".join("%s x%d" % item for item in sorted(counts.items())) or "clean"))
+    if unrouted or blocking:
+        raise SystemExit("BUILD REJECTED: %d unrouted, blocking DRC entries %s.\n"
+                         "The repository files were left untouched; the failed build is in %s"
+                         % (unrouted, blocking or "none", build))
+
+    fab = os.path.join(HERE, "fab")
+    os.makedirs(fab, exist_ok=True)
+    for name in PROJECT_FILES:
+        shutil.copyfile(os.path.join(build, name), os.path.join(HERE, name))
+    shutil.copyfile(report, os.path.join(fab, NAME + "_drc.txt"))
+    write_outputs(os.path.join(HERE, NAME + ".kicad_sch"), os.path.join(HERE, NAME + ".kicad_pcb"), fab)
     print("outputs written to", fab)
 
 

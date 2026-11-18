@@ -49,9 +49,13 @@ DECAY_FACTOR = 0.25
 WEBSOCKET_TIMEOUT_S = 1.0 # Timeout for ws.recv()
 PULSE_PERIOD_S = 1.0
 
+# Breadboard wiring (classic ESP32 DevKit): green 18, orange 19, red 4, no boost enable.
+# Harmony XVU driver board (hardware/, ESP32-C3): green 4, orange 5, red 6, boost enable 10.
+# On the ESP32-C3, GPIO18/19 are the USB pins and must not be used for LEDs.
 PIN_NUM_GREEN = 18
 PIN_NUM_ORANGE = 19
 PIN_NUM_RED = 4
+PIN_NUM_BOOST_EN = None # GPIO that switches the 24 V rail on (high = on); None if not fitted
 PWM_FREQUENCY = 1000
 
 # --- NEW: Timing & Delay Configuration ---
@@ -91,6 +95,13 @@ try:
 except Exception as e:
     print(f"ERROR: PWM Init failed: {e}")
     machine.reset()
+
+# --- 24 V rail (XVU driver board only) ---
+# Enabled after the PWM outputs are at zero duty, so the tower stays dark while the rail rises.
+boost_enable_pin = None
+if PIN_NUM_BOOST_EN is not None:
+    boost_enable_pin = machine.Pin(PIN_NUM_BOOST_EN, machine.Pin.OUT, value=1)
+    print("24 V rail enabled.")
 
 # --- Helper Functions ---
 def scale_to_duty_u16(value_8bit): value_8bit = max(0, min(255, value_8bit)); return value_8bit * 257
@@ -370,6 +381,7 @@ if __name__ == "__main__":
         try:
             for pin_key in pwm_pins: pwm_pins[pin_key].deinit()
             print("PWM deinitialized.")
+            if boost_enable_pin is not None: boost_enable_pin.value(0)
         except Exception as e: print(f"Error during PWM deinit: {e}")
         print("Script finished.")
 

@@ -42,7 +42,9 @@ PARTS = {
     "5k1":    dict(mpn="0603WAF5101T5E", lcsc="C23186", src="S", desc="Resistor 5.1 k 1 % 0603"),
     "100k":   dict(mpn="0603WAF1003T5E", lcsc="C25803", src="S", desc="Resistor 100 k 1 % 0603"),
     "1k":     dict(mpn="0603WAF1001T5E", lcsc="C21190", src="S", desc="Resistor 1 k 1 % 0603"),
-    "390k":   dict(mpn="0603WAF3903T5E", lcsc="", src="M", desc="Resistor 390 k 1 % 0603"),
+    # R8 sets the boost output voltage. If it is missing the converter runs open loop, so it must
+    # never be left unmatched in the assembly order.
+    "390k":   dict(mpn="0603WAF3903T5E", lcsc="C23150", src="S", desc="Resistor 390 k 1 % 0603"),
     "100n":   dict(mpn="CC0603KRX7R9BB104", lcsc="C14663", src="S", desc="Capacitor 100 nF 50 V X7R 0603"),
     "1u":     dict(mpn="CL10A105KB8NNNC", lcsc="C15849", src="S", desc="Capacitor 1 uF 50 V X5R 0603"),
     "10u":    dict(mpn="CL21A106KAYNNNE", lcsc="C15850", src="S", desc="Capacitor 10 uF 25 V X5R 0805"),
@@ -87,7 +89,13 @@ def _fet(ref, gate, drain, at, sch):
 
 
 # Channel centre lines (x) of the four switched outputs; equal to the terminal pin positions.
-X_G, X_O, X_R, X_AUX = -3.5, 0.0, 3.5, 7.0
+# Expansion header: pin 1 position; pins 2..4 follow southwards at 2.54 mm. East of the module,
+# beside GPIO0/GPIO1.
+J3_AT = (13.0, -12.8)
+J3_LABELS = ("IO0", "IO1", "3V3", "GND")
+
+# Ordered so that the pre-laid gate tracks from GPIO4..7 reach them without crossing.
+X_G, X_O, X_R, X_AUX = 7.0, 3.5, 0.0, -3.5
 
 COMPONENTS = [
     # ---------------------------------------------------------------- USB input
@@ -127,7 +135,9 @@ COMPONENTS = [
     _cap("C6", "22u", "C0805", "22u", "+5V", "GND", (-15.5, 0.6), 0, (218.44, 60.96)),
     _cap("C7", "10u/50V", "C1206", "10u50", "+24V", "GND", (-20.0, 11.9), 0, (325.12, 60.96)),
     _cap("C8", "10u/50V", "C1206", "10u50", "+24V", "GND", (-14.6, 11.9), 0, (340.36, 60.96)),
-    _r("R7", "100k", "+3V3", "BOOST_EN", (-11.6, 2.7), 0, (231.14, 76.2)),
+    # Pull-down: the 24 V rail stays off during plug-in, reset and flashing until the firmware
+    # drives GPIO10 high.
+    _r("R7", "100k", "GND", "BOOST_EN", (-11.6, 2.7), 0, (231.14, 76.2)),
     _r("R8", "390k", "+24V", "FB", (-11.6, 8.5), 0, (302.26, 50.8)),
     _r("R9", "10k", "FB", "GND", (-11.6, 6.6), 0, (302.26, 71.12)),
 
@@ -139,9 +149,10 @@ COMPONENTS = [
     }, (0.0, -12.0), 0, (119.38, 193.04)),
     _cap("C3", "10u", "C0805", "10u", "+3V3", "GND", (-13.3, -16.3), 90, (53.34, 162.56)),
     _cap("C4", "100n", "C0603", "100n", "+3V3", "GND", (-11.3, -16.5), 90, (66.04, 162.56)),
-    _r("R3", "10k", "+3V3", "EN", (9.4, -2.2), 90, (53.34, 190.5)),
-    _cap("C5", "1u", "C0603", "1u", "EN", "GND", (11.2, -2.2), 90, (53.34, 213.36)),
-    _r("R4", "10k", "+3V3", "IO2", (11.5, -15.5), 90, (175.26, 162.56)),
+    # Reset RC beside the EN pin; the EN pads face north, towards that pin.
+    _r("R3", "10k", "+3V3", "EN", (-11.3, -12.6), 90, (53.34, 190.5)),
+    _cap("C5", "1u", "C0603", "1u", "GND", "EN", (-13.0, -12.6), 90, (53.34, 213.36)),
+    _r("R4", "10k", "+3V3", "IO2", (11.5, -17.0), 90, (175.26, 162.56)),
     _r("R5", "10k", "+3V3", "IO8", (-11.2, -5.5), 90, (66.04, 190.5)),
     _r("R6", "1k", "+3V3", "LED_A", (-12.9, -5.5), 90, (187.96, 162.56)),
     _c("LED1", "Device:LED", "red", "LED0603", "LEDR", {"1": "IO8", "2": "LED_A"},
@@ -151,25 +162,26 @@ COMPONENTS = [
     _c("SW2", "Switch:SW_Push", "RESET", "SW", "TACT", {"1": "EN", "2": "GND"},
        (4.2, -1.2), 0, (114.3, 243.84)),
     _c("J3", "Connector_Generic:Conn_01x04", "EXP", "HDR4", "HDR4", {
-        "1": "+3V3", "2": "IO0", "3": "IO1", "4": "GND",
-    }, (-3.81, 4.1), 90, (180.34, 228.6), dnp=True, smt=False),
+        "1": "IO0", "2": "IO1", "3": "+3V3", "4": "GND",
+    }, J3_AT, 0, (180.34, 228.6), dnp=True, smt=False),
 
     # ---------------------------------------------------------------- output stage
     _fet("Q1", "G_G", "OUT_G", (X_G, 13.3), (254.0, 147.32)),
     _fet("Q2", "G_O", "OUT_O", (X_O, 13.3), (254.0, 182.88)),
     _fet("Q3", "G_R", "OUT_R", (X_R, 13.3), (254.0, 218.44)),
     _fet("Q4", "G_AUX", "OUT_AUX", (X_AUX, 13.3), (254.0, 254.0)),
-    _r("R10", "100R", "GATE_G", "G_G", (X_G + 0.8, 7.9), 90, (226.06, 137.16)),
-    _r("R11", "100R", "GATE_O", "G_O", (X_O + 0.8, 7.9), 90, (226.06, 172.72)),
-    _r("R12", "100R", "GATE_R", "G_R", (X_R + 0.8, 7.9), 90, (226.06, 208.28)),
-    _r("R13", "100R", "GATE_AUX", "G_AUX", (X_AUX + 0.8, 7.9), 90, (226.06, 243.84)),
+    # Pad 2 is the northern pad (towards the module), pad 1 the southern one (towards the FET).
+    _r("R10", "100R", "G_G", "GATE_G", (X_G + 0.8, 7.9), 90, (226.06, 137.16)),
+    _r("R11", "100R", "G_O", "GATE_O", (X_O + 0.8, 7.9), 90, (226.06, 172.72)),
+    _r("R12", "100R", "G_R", "GATE_R", (X_R + 0.8, 7.9), 90, (226.06, 208.28)),
+    _r("R13", "100R", "G_AUX", "GATE_AUX", (X_AUX + 0.8, 7.9), 90, (226.06, 243.84)),
     _r("R14", "10k", "GND", "G_G", (X_G, 10.3), 0, (238.76, 157.48)),
     _r("R15", "10k", "GND", "G_O", (X_O, 10.3), 0, (238.76, 193.04)),
     _r("R16", "10k", "GND", "G_R", (X_R, 10.3), 0, (238.76, 228.6)),
     _r("R17", "10k", "GND", "G_AUX", (X_AUX, 10.3), 0, (238.76, 264.16)),
     # Rotated 180 deg: wire entry faces the board centre, pin 1 is the eastern pin.
     _c("J2", "Connector:Screw_Terminal_01x05", "TOWER", "TB5", "TB5", {
-        "1": "OUT_AUX", "2": "OUT_R", "3": "OUT_O", "4": "OUT_G", "5": "+24V",
+        "1": "OUT_G", "2": "OUT_O", "3": "OUT_R", "4": "OUT_AUX", "5": "+24V",
     }, (7.0, 21.5), 180, (330.2, 198.12), smt=False),
 ]
 
@@ -195,10 +207,32 @@ CUSTOM_SYMBOLS = {
 PREROUTES = [
     dict(net="+5V", layer="B.Cu", width=0.8, via=(0.8, 0.4),
          points=[(10.9, 7.0), (10.2, 6.3), (-12.3, 6.3), (-17.8, 0.8)]),
+    # Gate signals: from a via beside each module pin (GPIO4..7) as one bundle down the bottom
+    # layer, fanned out to a via above each gate resistor. Nested, so no two of them cross.
+    # Reset line from the EN pin to SW2, innermost track of the same bundle.
+    dict(net="EN", layer="B.Cu", width=0.25, via=(0.6, 0.3),
+         points=[(-6.6, -16.5), (-3.6, -16.5), (-3.6, -4.6), (2.4, -4.6)]),
+    dict(net="GATE_G", layer="B.Cu", width=0.25, via=(0.6, 0.3),
+         points=[(-6.6, -15.0), (-4.1, -15.0), (-4.1, 0.5), (6.0, 0.5), (6.0, 2.5)]),
+    dict(net="GATE_O", layer="B.Cu", width=0.25, via=(0.6, 0.3),
+         points=[(-6.6, -13.5), (-4.6, -13.5), (-4.6, 1.0), (2.54, 1.0), (2.54, 2.5)]),
+    dict(net="GATE_R", layer="B.Cu", width=0.25, via=(0.6, 0.3),
+         points=[(-6.6, -12.0), (-5.1, -12.0), (-5.1, 1.5), (0.0, 1.5), (0.0, 2.5)]),
+    dict(net="GATE_AUX", layer="B.Cu", width=0.25, via=(0.6, 0.3),
+         points=[(-6.6, -10.5), (-5.6, -10.5), (-5.6, 2.0), (-2.54, 2.0), (-2.54, 2.5)]),
 ]
 
 # No tracks, vias or copper pour within this radius of a mounting hole (screw head, printed boss).
 HOLE_KEEPOUT_RADIUS_MM = 3.4
+
+# Ground stitching vias between the top and bottom pour. Tried in this order: the listed points
+# (around the module ground pad), then a regular grid. A point is used only where both pours are
+# solid and no pad is nearby.
+STITCH_VIA = (0.6, 0.3)                 # diameter, drill
+STITCH_POINTS = [(-1.5, -11.8), (3.4, -11.8), (0.96, -9.3), (0.96, -14.3)]
+STITCH_GRID_MM = 3.0
+STITCH_MIN_SPACING_MM = 2.0
+STITCH_PAD_DISTANCE_MM = 0.6            # from the bounding box of any pad
 
 # Nets routed with wide tracks.
 POWER_NETS = ["VBUS", "+5V", "+3V3", "+24V", "SW", "GND", "OUT_G", "OUT_O", "OUT_R", "OUT_AUX"]
@@ -208,7 +242,7 @@ SCH_NOTES = [
     (30.48, 25.4, "USB-C INPUT: 5 V supply and native USB (REPL / flashing)"),
     (137.16, 25.4, "3.3 V RAIL"),
     (213.36, 20.32, "BOOST 5 V -> 24 V   Vout = 0.6 V x (1 + R8/R9) = 24.0 V"),
-    (30.48, 144.78, "ESP32-C3: GPIO4 = green, GPIO5 = orange, GPIO6 = red, GPIO7 = aux, GPIO10 = boost enable"),
+    (30.48, 144.78, "ESP32-C3: GPIO4 = green, GPIO5 = orange, GPIO6 = red, GPIO7 = aux, GPIO10 = boost enable (high = 24 V on)"),
     (213.36, 121.92, "LOW-SIDE SWITCHES: tower common = +24 V, one switched return per tier"),
     (30.48, 276.86, "SW1 BOOT and SW2 RESET are reachable through the centre hole of the printed lid."),
 ]

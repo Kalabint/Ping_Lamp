@@ -23,6 +23,8 @@ Read "Open points" before ordering.
 
 | Path | Content |
 |---|---|
+| [`docs/datasheet.md`](docs/datasheet.md) | Datasheet: ratings, electrical design values, connectors, mechanical data |
+| [`docs/manual.md`](docs/manual.md) | Assembly and operating manual |
 | `pcb/design.py` | Parts, netlist, placement, pre-laid tracks. Edit this, not the KiCad files. |
 | `pcb/generate.py` | Builds schematic, routed PCB and `pcb/fab/` from `design.py` |
 | `pcb/ping_lamp.kicad_*` | KiCad 7 project (generated) |

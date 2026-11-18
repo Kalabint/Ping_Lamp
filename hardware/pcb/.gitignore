@@ -1,0 +1,4 @@
+__pycache__/
+logs/
+*.kicad_prl
+fp-info-cache

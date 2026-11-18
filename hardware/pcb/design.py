@@ -139,8 +139,8 @@ COMPONENTS = [
     }, (0.0, -12.0), 0, (119.38, 193.04)),
     _cap("C3", "10u", "C0805", "10u", "+3V3", "GND", (-13.3, -16.3), 90, (53.34, 162.56)),
     _cap("C4", "100n", "C0603", "100n", "+3V3", "GND", (-11.3, -16.5), 90, (66.04, 162.56)),
-    _r("R3", "10k", "+3V3", "EN", (-18.0, -5.5), 90, (53.34, 190.5)),
-    _cap("C5", "1u", "C0603", "1u", "EN", "GND", (-16.3, -5.5), 90, (53.34, 213.36)),
+    _r("R3", "10k", "+3V3", "EN", (9.4, -2.2), 90, (53.34, 190.5)),
+    _cap("C5", "1u", "C0603", "1u", "EN", "GND", (11.2, -2.2), 90, (53.34, 213.36)),
     _r("R4", "10k", "+3V3", "IO2", (11.5, -15.5), 90, (175.26, 162.56)),
     _r("R5", "10k", "+3V3", "IO8", (-11.2, -5.5), 90, (66.04, 190.5)),
     _r("R6", "1k", "+3V3", "LED_A", (-12.9, -5.5), 90, (187.96, 162.56)),
@@ -189,6 +189,16 @@ CUSTOM_SYMBOLS = {
         bottom=[("9", "GND", "power_in"), ("19", "GND", "power_in")],
     ),
 }
+
+# Tracks laid before autorouting (locked). The 5 V feed of the boost converter crosses the board
+# on the bottom layer; left to itself the router takes it around the rim.
+PREROUTES = [
+    dict(net="+5V", layer="B.Cu", width=0.8, via=(0.8, 0.4),
+         points=[(10.9, 7.0), (10.2, 6.3), (-12.3, 6.3), (-17.8, 0.8)]),
+]
+
+# No tracks, vias or copper pour within this radius of a mounting hole (screw head, printed boss).
+HOLE_KEEPOUT_RADIUS_MM = 3.4
 
 # Nets routed with wide tracks.
 POWER_NETS = ["VBUS", "+5V", "+3V3", "+24V", "SW", "GND", "OUT_G", "OUT_O", "OUT_R", "OUT_AUX"]

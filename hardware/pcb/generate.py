@@ -199,7 +199,7 @@ def build_schematic(path):
                   nets={"1": net}, sch=(33.02 + 15.24 * i, 127.0), dnp=False, flag=True)
              for i, net in enumerate(["GND", "VBUS", "+5V", "+3V3", "+24V"])]
     holes = [dict(ref="H%d" % (i + 1), sym="Mechanical:MountingHole", value="M3", part=None, nets={},
-                  fp=design.FP["HOLE"], sch=(330.2 + 12.7 * i, 259.08), dnp=False, flag=True) for i in range(4)]
+                  fp=design.FP["HOLE"], sch=(330.2 + 12.7 * i, 233.68), dnp=False, flag=True) for i in range(4)]
 
     for comp in design.COMPONENTS + extra + holes:
         sym = libs.setdefault(comp["sym"], lib_symbol(comp["sym"]))
@@ -304,6 +304,17 @@ def write_project(path):
         "schematic": {"legacy_lib_dir": "", "legacy_lib_list": []},
         "sheets": [], "text_variables": {},
     }
+    # Saving a board makes KiCad write its own, complete project file. Keep that one and only
+    # replace the rules and net classes in it.
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            native = json.load(fh)
+        template = (native.get("net_settings", {}).get("classes") or [{}])[0]
+        native.setdefault("board", {}).setdefault("design_settings", {}).setdefault("rules", {}).update(RULES)
+        net_settings = native.setdefault("net_settings", {})
+        net_settings["classes"] = [dict(template, **cls) for cls in project["net_settings"]["classes"]]
+        net_settings["netclass_patterns"] = project["net_settings"]["netclass_patterns"]
+        project = native
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(project, fh, indent=2)
 
@@ -340,11 +351,10 @@ def add_text(board, text, x, y, layer, size=1.0, angle=0):
     board.Add(item)
 
 
-def build_board(path, holes):
-    board = pcbnew.BOARD()
-    radius = design.BOARD_DIAMETER_MM / 2
+def apply_rules(board):
+    """Sets design rules and net classes on a board and returns the Power net class.
 
-    # Design rules and net classes (the same values are written to the project file).
+    Needed after every load as well: a headless LoadBoard does not restore the net classes."""
     bds = board.GetDesignSettings()
     bds.m_MinClearance = mm(RULES["min_clearance"])
     bds.m_TrackMinWidth = mm(RULES["min_track_width"])
@@ -361,6 +371,17 @@ def build_board(path, holes):
         cls.SetViaDiameter(mm(via))
         cls.SetViaDrill(mm(drill))
     bds.m_NetSettings.m_NetClasses["Power"] = power
+    for name in design.POWER_NETS:
+        net = board.FindNet(name)
+        if net is not None:
+            net.SetNetClass(power)
+    return power
+
+
+def build_board(path, holes):
+    board = pcbnew.BOARD()
+    radius = design.BOARD_DIAMETER_MM / 2
+    power = apply_rules(board)
 
     outline = pcbnew.PCB_SHAPE(board)
     outline.SetShape(pcbnew.SHAPE_T_CIRCLE)
@@ -421,17 +442,58 @@ def build_board(path, holes):
         fp.Reference().SetVisible(False)
         board.Add(fp)
 
+        keepout = pcbnew.ZONE(board)
+        keepout.SetIsRuleArea(True)
+        keepout.SetDoNotAllowTracks(True)
+        keepout.SetDoNotAllowVias(True)
+        keepout.SetDoNotAllowCopperPour(True)
+        keepout.SetDoNotAllowPads(False)
+        keepout.SetDoNotAllowFootprints(False)
+        layers = pcbnew.LSET()
+        layers.AddLayer(pcbnew.F_Cu)
+        layers.AddLayer(pcbnew.B_Cu)
+        keepout.SetLayerSet(layers)
+        poly = keepout.Outline()
+        poly.NewOutline()
+        for kx, ky in circle_points(design.HOLE_KEEPOUT_RADIUS_MM, 24):
+            poly.Append(mm(CX + x + kx), mm(CY + y + ky))
+        board.Add(keepout)
+
+    for route in design.PREROUTES:
+        points = route["points"]
+        for start, end in zip(points, points[1:]):
+            track = pcbnew.PCB_TRACK(board)
+            track.SetStart(pt(*start))
+            track.SetEnd(pt(*end))
+            track.SetWidth(mm(route["width"]))
+            track.SetLayer(board.GetLayerID(route["layer"]))
+            track.SetNet(net(route["net"]))
+            track.SetLocked(True)
+            board.Add(track)
+        for position in (points[0], points[-1]):
+            via = pcbnew.PCB_VIA(board)
+            via.SetPosition(pt(*position))
+            via.SetViaType(pcbnew.VIATYPE_THROUGH)
+            via.SetWidth(mm(route["via"][0]))
+            via.SetDrill(mm(route["via"][1]))
+            via.SetLayerPair(pcbnew.F_Cu, pcbnew.B_Cu)
+            via.SetNet(net(route["net"]))
+            via.SetLocked(True)
+            board.Add(via)
+
     # Silkscreen: keep reference designators small, hide the values.
-    # Passives and transistors are too dense for legible designators; they stay on the F.Fab layer.
+    # Passives, transistors and switches are too dense for legible designators; they stay on F.Fab.
     for fp in board.GetFootprints():
         fp.Value().SetVisible(False)
         ref = fp.Reference()
         ref.SetTextSize(pcbnew.VECTOR2I(mm(0.8), mm(0.8)))
         ref.SetTextThickness(mm(0.12))
-        if re.match(r"(R|C|Q|LED|H)\d", fp.GetReference()):
+        if re.match(r"(R|C|Q|LED|H|SW)\d", fp.GetReference()):
             ref.SetVisible(False)
 
-    add_text(board, "PING LAMP XVU  v1.0", 0, 26.0, pcbnew.B_SilkS, 1.2)
+    add_text(board, "BOOT", -4.2, 2.2, pcbnew.F_SilkS, 0.8)
+    add_text(board, "RST", 4.2, 2.2, pcbnew.F_SilkS, 0.8)
+    add_text(board, "PING LAMP XVU v1.0", 0, 13.3, pcbnew.B_SilkS, 1.0)
     add_text(board, "USB 5V in / 24V out", 0, -3.0, pcbnew.B_SilkS, 1.0)
     for label, x in (("AUX", design.X_AUX), ("R", design.X_R), ("O", design.X_O),
                      ("G", design.X_G), ("+24V", -7.0)):
@@ -457,22 +519,40 @@ def add_ground_zones(board, gnd):
         zone.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
         zone.SetAssignedPriority(0)
         board.Add(zone)
-    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
 
 
-def autoroute(board, pcb_path, jar, work):
+def autoroute(board, pcb_path, jar, work, reuse=False):
     dsn, ses = os.path.join(work, NAME + ".dsn"), os.path.join(work, NAME + ".ses")
-    for f in (dsn, ses):
-        if os.path.exists(f):
-            os.remove(f)
-    if not pcbnew.ExportSpecctraDSN(board, dsn):
-        raise SystemExit("DSN export failed")
-    cmd = ["java", "-jar", jar, "-de", dsn, "-do", ses, "-mp", "40", "-mt", "1", "-dct", "0"]
-    if shutil.which("xvfb-run"):
-        cmd = ["xvfb-run", "-a"] + cmd
-    log = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
-    if not os.path.exists(ses):
-        raise SystemExit("Freerouting produced no session file:\n" + log.stdout[-3000:] + log.stderr[-3000:])
+    if not (reuse and os.path.exists(ses)):
+        for f in (dsn, ses):
+            if os.path.exists(f):
+                os.remove(f)
+        # The router keeps only its track clearance to the outline. Export a slightly smaller
+        # outline so that the copper-to-edge rule holds on the real one.
+        radius = design.BOARD_DIAMETER_MM / 2
+        outline = next(d for d in board.GetDrawings() if d.GetLayer() == pcbnew.Edge_Cuts)
+        outline.SetEnd(pt(radius - 0.4, 0))
+        exported = pcbnew.ExportSpecctraDSN(board, dsn)
+        outline.SetEnd(pt(radius, 0))
+        if not exported:
+            raise SystemExit("DSN export failed")
+        # The export lists every net in the default class. Move the power nets into the (empty)
+        # Power class so that the router uses the wide tracks.
+        with open(dsn, encoding="utf-8") as fh:
+            text = fh.read()
+        match = re.search(r'\(class kicad_default ""(.*?)\n\s*\(circuit', text, re.S)
+        names = match.group(1).split()
+        wide = [n for n in names if n in design.POWER_NETS]
+        text = (text[:match.start(1)] + " " + " ".join(n for n in names if n not in wide)
+                + text[match.end(1):]).replace("(class Power\n", "(class Power " + " ".join(wide) + "\n", 1)
+        with open(dsn, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        cmd = ["java", "-jar", jar, "-de", dsn, "-do", ses, "-mp", "40", "-mt", "1", "-dct", "0"]
+        if shutil.which("xvfb-run"):
+            cmd = ["xvfb-run", "-a"] + cmd
+        log = subprocess.run(cmd, capture_output=True, text=True, timeout=1800, cwd=work)
+        if not os.path.exists(ses):
+            raise SystemExit("Freerouting produced no session file:\n" + log.stdout[-3000:] + log.stderr[-3000:])
     import_session(board, ses)
 
 
@@ -488,6 +568,7 @@ def import_session(board, ses_path):
     def point(x, y):
         return pcbnew.VECTOR2I(mm(float(x) * scale), mm(-float(y) * scale))
 
+    # The session holds only what the router added; the locked pre-laid tracks stay on the board.
     for net_node in child(routes, "network_out")[1:]:
         net = board.FindNet(str(net_node[1]))
         if net is None:
@@ -611,6 +692,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--freerouting", help="path to freerouting jar; omit to keep the board unrouted")
     ap.add_argument("--work", default="/tmp/ping_lamp_build", help="scratch directory")
+    ap.add_argument("--reuse-session", action="store_true",
+                    help="skip the router if the scratch directory already holds a session file")
     args = ap.parse_args()
     os.makedirs(args.work, exist_ok=True)
     fab = os.path.join(HERE, "fab")
@@ -625,8 +708,14 @@ def main():
     print("netlist: %d pins, schematic == PCB == design.py" % pins)
 
     if args.freerouting:
-        autoroute(board, pcb_path, args.freerouting, args.work)
+        autoroute(board, pcb_path, args.freerouting, args.work, args.reuse_session)
     add_ground_zones(board, nets["GND"])
+    pcbnew.SaveBoard(pcb_path, board)
+
+    # Zone filling needs a board that is attached to a project, i.e. one loaded from disk.
+    board = pcbnew.LoadBoard(pcb_path)
+    apply_rules(board)
+    pcbnew.ZONE_FILLER(board).Fill(board.Zones())
     pcbnew.SaveBoard(pcb_path, board)
     write_project(os.path.join(HERE, NAME + ".kicad_pro"))      # last: saving a board rewrites the project
     print("unrouted connections: %d" % unrouted_count(board))

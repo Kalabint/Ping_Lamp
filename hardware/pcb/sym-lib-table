@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name "PingLamp")(type "KiCad")(uri "${KIPRJMOD}/ping_lamp.kicad_sym")(options "")(descr "Ping Lamp project symbols"))
+)
